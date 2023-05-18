@@ -8,6 +8,7 @@ navbarPage(
   tabPanel('Peserta',    
      uiOutput("loadPeserta"),
      actionButton("absenPesertaButton", "Hadir!"),
+     hr(),
      DT::dataTableOutput('tblPeserta')
   ),
   tabPanel('Panitia',    

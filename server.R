@@ -4,7 +4,7 @@ mongoConnect <- function(col){
   mongo(collection=col, db=db, url=url)
 }
 
-loadTabelPeserta <- function(){
+loadTabelPeserta <- function(tipe){
   collection_agenda_presensi <- mongoConnect("agenda_presensi")
   collection_agenda <- mongoConnect("agenda")
   collection_peserta <- mongoConnect("peserta")
@@ -13,39 +13,39 @@ loadTabelPeserta <- function(){
   tbl_agenda <- collection_agenda$find()
   tbl_peserta <- collection_peserta$find()
   
-  tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by.x=0, by.y="id_peserta")
+  tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
+  tbl_comb <- tbl_comb[which(tbl_comb$tipe==tipe),] 
   tbl_comb <- subset(tbl_comb, select = c(nama, tanggal, waktu))
   tbl_comb
 }
 
+loadPeserta <- function(tipe){
+  collection_peserta <- mongoConnect("peserta")
+  collection_agenda_presensi <- mongoConnect("agenda_presensi")
+  
+  tbl_agenda_presensi <- collection_agenda_presensi$find()
+  tbl_peserta <- collection_peserta$find()
+  
+  tbl_peserta_filter <- collection_peserta$find(paste0('{"tipe": ', tipe, '}'))
+  tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
+  
+  filter <- subset(tbl_peserta_filter, !(nama %in% tbl_comb$nama))
+  
+  setNames(filter$id_peserta, filter$nama)
+}
+
 function(input, output) {
   tblRV <- reactiveValues(
-    tbl_comb_panitia = loadTabelPeserta(), tbl_comb_peserta = data.frame()
+    tbl_comb_panitia = loadTabelPeserta(1), tbl_comb_peserta = loadTabelPeserta(2),
+    list_peserta = loadPeserta(2), list_panitia = loadPeserta(1)
   )
   
-  listPanitia <- reactive({
-    collection_peserta <- mongoConnect("peserta")
-    tbl_peserta <- collection_peserta$find('{"tipe": 1}')
-    collection_peserta$disconnect()
-    
-    setNames(tbl_peserta$id_peserta, tbl_peserta$nama)
-  })
-  
-  listPeserta <- reactive({
-    collection_peserta <- mongoConnect("peserta")
-    tbl_peserta <- collection_peserta$find('{"tipe": 2}')
-    tbl_peserta$tipe <- NULL
-    collection_peserta$disconnect()
-    
-    setNames(tbl_peserta$id_peserta, tbl_peserta$nama)
-  })
-  
   output$loadPeserta <- renderUI({
-    selectInput("namaPeserta", "Nama Peserta", c(listPeserta()))
+    selectInput("namaPeserta", "Nama Peserta", tblRV$list_peserta)
   })
   
   output$loadPanitia <- renderUI({
-    selectInput("namaPanitia", "Nama Panitia", listPanitia())
+    selectInput("namaPanitia", "Nama Panitia", tblRV$list_panitia)
   })
   
   
@@ -54,12 +54,25 @@ function(input, output) {
     newdocument <- data.frame(id_peserta=input$namaPanitia, id_agenda=1, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
     collection_agenda_presensi$insert(newdocument)
     
-    tblRV$tbl_comb_panitia <- loadTabelPeserta()
+    tblRV$tbl_comb_panitia <- loadTabelPeserta(1)
+    tblRV$list_panitia = loadPeserta(1)
   })
   
-  # display 10 rows initially
+  observeEvent(input$absenPesertaButton, {
+    collection_agenda_presensi <- mongoConnect("agenda_presensi")
+    newdocument <- data.frame(id_peserta=input$namaPeserta, id_agenda=1, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
+    collection_agenda_presensi$insert(newdocument)
+    
+    tblRV$tbl_comb_peserta <- loadTabelPeserta(2)
+    tblRV$list_peserta = loadPeserta(2)
+  })
+  
   output$tblPanitia <- DT::renderDataTable({
     DT::datatable(tblRV$tbl_comb_panitia, options = list(pageLength = 25))
+  })
+  
+  output$tblPeserta <- DT::renderDataTable({
+    DT::datatable(tblRV$tbl_comb_peserta, options = list(pageLength = 25))
   })
   
 }
