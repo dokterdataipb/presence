@@ -1,6 +1,6 @@
 mongoConnect <- function(col){
-  db <- "sot"
-  url='mongodb+srv://sta562:sta@clustersta562.yiua2.mongodb.net/?retryWrites=true&w=majority'
+  db = Sys.getenv("MONGO_CLOUD_DB")
+  url = Sys.getenv("MONGO_CLOUD_URL")
   mongo(collection=col, db=db, url=url)
 }
 
