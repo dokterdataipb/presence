@@ -4,7 +4,10 @@ mongoConnect <- function(col){
   mongo(collection=col, db=db, url=url)
 }
 
+
 loadTabelPeserta <- function(tipe){
+  tbl_comb <- data.frame(nama=NULL, tanggal=NULL, waktu=NULL)
+  
   collection_agenda_presensi <- mongoConnect("agenda_presensi")
   collection_agenda <- mongoConnect("agenda")
   collection_peserta <- mongoConnect("peserta")
@@ -13,9 +16,12 @@ loadTabelPeserta <- function(tipe){
   tbl_agenda <- collection_agenda$find()
   tbl_peserta <- collection_peserta$find()
   
-  tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
-  tbl_comb <- tbl_comb[which(tbl_comb$tipe==tipe),] 
-  tbl_comb <- subset(tbl_comb, select = c(nama, tanggal, waktu))
+  if(nrow(tbl_agenda_presensi)!=0){
+    tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
+    tbl_comb <- tbl_comb[which(tbl_comb$tipe==tipe),] 
+    tbl_comb <- subset(tbl_comb, select = c(nama, tanggal, waktu))
+  }
+  
   tbl_comb
 }
 
@@ -27,9 +33,13 @@ loadPeserta <- function(tipe){
   tbl_peserta <- collection_peserta$find()
   
   tbl_peserta_filter <- collection_peserta$find(paste0('{"tipe": ', tipe, '}'))
-  tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
   
-  filter <- subset(tbl_peserta_filter, !(nama %in% tbl_comb$nama))
+  if(nrow(tbl_agenda_presensi)!=0){
+    tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
+    filter <- subset(tbl_peserta_filter, !(nama %in% tbl_comb$nama))
+  } else {
+    filter <- tbl_peserta_filter
+  }
   
   setNames(filter$id_peserta, filter$nama)
 }
@@ -51,7 +61,7 @@ function(input, output) {
   
   observeEvent(input$absenPanitiaButton, {
     collection_agenda_presensi <- mongoConnect("agenda_presensi")
-    newdocument <- data.frame(id_peserta=input$namaPanitia, id_agenda=1, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
+    newdocument <- data.frame(id_peserta=input$namaPanitia, id_agenda=1, id_tipe=1, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
     collection_agenda_presensi$insert(newdocument)
     
     tblRV$tbl_comb_panitia <- loadTabelPeserta(1)
@@ -60,11 +70,27 @@ function(input, output) {
   
   observeEvent(input$absenPesertaButton, {
     collection_agenda_presensi <- mongoConnect("agenda_presensi")
-    newdocument <- data.frame(id_peserta=input$namaPeserta, id_agenda=1, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
+    newdocument <- data.frame(id_peserta=input$namaPeserta, id_agenda=1, id_tipe=2, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
     collection_agenda_presensi$insert(newdocument)
     
     tblRV$tbl_comb_peserta <- loadTabelPeserta(2)
-    tblRV$list_peserta = loadPeserta(2)
+    tblRV$list_peserta <- loadPeserta(2)
+  })
+  
+  observeEvent(input$resetPesertaButton, {
+    collection_agenda_presensi <- mongoConnect("agenda_presensi")
+    collection_agenda_presensi$remove('{"id_tipe": {"$eq": 2}}')
+    
+    tblRV$tbl_comb_peserta <- loadTabelPeserta(2)
+    tblRV$list_peserta <- loadPeserta(2)
+  })
+  
+  observeEvent(input$resetPanitiaButton, {
+    collection_agenda_presensi <- mongoConnect("agenda_presensi")
+    collection_agenda_presensi$remove('{"id_tipe": {"$eq": 1}}')
+    
+    tblRV$tbl_comb_panitia <- loadTabelPeserta(1)
+    tblRV$list_panitia <- loadPeserta(1)
   })
   
   output$tblPanitia <- DT::renderDataTable({
