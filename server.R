@@ -19,7 +19,13 @@ loadTabelPeserta <- function(tipe){
   if(nrow(tbl_agenda_presensi)!=0){
     tbl_comb <- merge(tbl_peserta, tbl_agenda_presensi, by="id_peserta")
     tbl_comb <- tbl_comb[which(tbl_comb$tipe==tipe),] 
-    tbl_comb <- subset(tbl_comb, select = c(nama, tanggal, waktu))
+    if(tipe==2){
+      tbl_comb <- subset(tbl_comb, select = c(nama, id_agenda, tanggal, waktu))
+      colnames(tbl_comb) <- c("Nama", "Sesi", "Tanggal", "Waktu")
+    } else {
+      tbl_comb <- subset(tbl_comb, select = c(nama, tanggal, waktu))
+      colnames(tbl_comb) <- c("Nama", "Tanggal", "Waktu")
+    }
   }
   
   tbl_comb
@@ -70,7 +76,7 @@ function(input, output) {
   
   observeEvent(input$absenPesertaButton, {
     collection_agenda_presensi <- mongoConnect("agenda_presensi")
-    newdocument <- data.frame(id_peserta=input$namaPeserta, id_agenda=1, id_tipe=2, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
+    newdocument <- data.frame(id_peserta=input$namaPeserta, id_agenda=input$sesiAcara, id_tipe=2, tanggal=format(Sys.time(), "%a %d %b %Y"), waktu=format(Sys.time(), "%X"))
     collection_agenda_presensi$insert(newdocument)
     
     tblRV$tbl_comb_peserta <- loadTabelPeserta(2)
@@ -100,6 +106,24 @@ function(input, output) {
   output$tblPeserta <- DT::renderDataTable({
     DT::datatable(tblRV$tbl_comb_peserta, options = list(pageLength = 25))
   })
+  
+  output$downloadPanitiaButton <- downloadHandler(
+    filename = function() {
+      paste0("panitia.csv")
+    },
+    content = function(file) {
+      write.csv(tblRV$tbl_comb_panitia, file)
+    }
+  )
+  
+  output$downloadPesertaButton <- downloadHandler(
+    filename = function() {
+      paste0("peserta.csv")
+    },
+    content = function(file) {
+      write.csv(tblRV$tbl_comb_peserta, file)
+    }
+  )
   
 }
 
